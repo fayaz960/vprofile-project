@@ -1,66 +1,64 @@
 pipeline {
     agent any
-    
     tools {
         maven "MAVEN3.9"
         jdk "JDK17"
     }
-
+    
     environment {
         SNAP_REPO = 'vprofile-snapshot'
         NEXUS_USER = 'admin'
         NEXUS_PASS = 'admin123'
         RELEASE_REPO = 'vprofile-release'
         CENTRAL_REPO = 'vpro-maven-central'
-        NEXUSIP = '172.31.35.75'
+        NEXUSIP = '172.31.5.4'
         NEXUSPORT = '8081'
         NEXUS_GRP_REPO = 'vpro-maven-group'
         NEXUS_LOGIN = 'nexuslogin'
+        SONARSERVER = 'sonarserver'
+        SONARSCANNER = 'sonarscanner'
     }
 
     stages {
         stage('Build') {
             steps {
-                echo "Building the project..."
                 sh 'mvn -s settings.xml -DskipTests install'
             }
             post {
                 success {
-                    echo "Build completed successfully. Now archiving artifacts."
+                    echo "Now Archiving."
                     archiveArtifacts artifacts: '**/*.war'
-                }
-                failure {
-                    echo "Build failed! Check the logs."
                 }
             }
         }
 
         stage('Test') {
             steps {
-                echo "Running tests..."
-                sh 'mvn test'
-            }
-            post {
-                success {
-                    echo "All tests passed successfully."
-                }
-                failure {
-                    echo "Some tests failed! Please review the test results."
-                }
+                sh 'mvn -s settings.xml test'
             }
         }
 
         stage('Checkstyle Analysis') {
             steps {
-                echo "Running Checkstyle analysis..."
                 sh 'mvn -s settings.xml checkstyle:checkstyle'
             }
-            post {
-                success {
-                    echo "Checkstyle passed without issues."
-                }
-                failure {
-                    echo "Checkstyle detected issues! Please review and fix them."
+        }
+
+        stage('Sonar Analysis') {
+            steps {
+                script {
+                    def scannerHome = tool SONARSCANNER
+                    withSonarQubeEnv(SONARSERVER) {
+                        sh """${scannerHome}/bin/sonar-scanner \
+                            -Dsonar.projectKey=vprofile \
+                            -Dsonar.projectName=vprofile \
+                            -Dsonar.projectVersion=1.0 \
+                            -Dsonar.sources=src/ \
+                            -Dsonar.java.binaries=target/test-classes/com/visualpathit/account/controllerTest/ \
+                            -Dsonar.junit.reportsPath=target/surefire-reports/ \
+                            -Dsonar.jacoco.reportsPath=target/jacoco.exec \
+                            -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml"""
+                    }
                 }
             }
         }
